@@ -17,34 +17,35 @@ class StateStore {
 
   loadUser() {
     try {
+      const sessionActive = sessionStorage.getItem('globetrotter_active_session');
       const stored = localStorage.getItem(CONFIG.STORAGE_KEY_USER);
-      if (stored) {
+      if (sessionActive && stored) {
         const parsed = JSON.parse(stored);
-        if (parsed && typeof parsed === 'object') {
+        if (parsed && typeof parsed.isLoggedIn === 'boolean' && parsed.isLoggedIn) {
           return parsed;
         }
       }
     } catch (e) {
       console.warn('Failed to parse user from localStorage', e);
     }
-    // By default, user is not authenticated on first visit
+    // When a user opens the website, ask for login or signup
     return {
-      id: null,
-      name: '',
-      email: '',
-      avatar: CONFIG.AVATAR_PRESETS[0],
-      bio: '',
-      homeCurrency: 'USD',
-      preferredLanguage: 'English (US)',
       isLoggedIn: false
     };
   }
 
-  loadTrips() {
-    if (!this.user || !this.user.isLoggedIn) {
-      return [];
+  logout() {
+    sessionStorage.removeItem('globetrotter_active_session');
+    localStorage.removeItem(CONFIG.STORAGE_KEY_USER);
+    this.user = { isLoggedIn: false };
+    this.emit('user:updated', this.user);
+    if (typeof AppRouter !== 'undefined') {
+      AppRouter.navigate('auth');
     }
-    const userKey = this.user.email || 'default';
+  }
+
+  loadTrips() {
+    const userKey = this.user ? this.user.email : 'default';
     const namespacedKey = CONFIG.STORAGE_KEY_TRIPS + '_' + userKey;
     try {
       const stored = localStorage.getItem(namespacedKey);
@@ -87,10 +88,7 @@ class StateStore {
   }
 
   loadWishlist() {
-    if (!this.user || !this.user.isLoggedIn) {
-      return [];
-    }
-    const userKey = this.user.email || 'default';
+    const userKey = this.user ? this.user.email : 'default';
     const namespacedKey = CONFIG.STORAGE_KEY_WISHLIST + '_' + userKey;
     try {
       const stored = localStorage.getItem(namespacedKey);
@@ -112,7 +110,7 @@ class StateStore {
 
   saveTrips(trips = this.trips) {
     this.trips = trips;
-    const userKey = this.user && this.user.email ? this.user.email : 'default';
+    const userKey = this.user ? this.user.email : 'default';
     localStorage.setItem(CONFIG.STORAGE_KEY_TRIPS + '_' + userKey, JSON.stringify(this.trips));
     this.emit('trips:updated', this.trips);
   }
@@ -124,31 +122,14 @@ class StateStore {
   }
 
   switchUser(user) {
+    if (user && user.isLoggedIn) {
+      sessionStorage.setItem('globetrotter_active_session', user.email || 'active');
+    }
     this.saveUser(user);
     this.trips = this.loadTrips();
     this.wishlist = this.loadWishlist();
-    this.currentTripId = this.trips.length > 0 ? this.trips[0].id : null;
     this.saveTrips(this.trips);
     this.saveWishlist(this.wishlist);
-  }
-
-  signOut() {
-    this.user = {
-      id: null,
-      name: '',
-      email: '',
-      avatar: CONFIG.AVATAR_PRESETS[0],
-      bio: '',
-      homeCurrency: 'USD',
-      preferredLanguage: 'English (US)',
-      isLoggedIn: false
-    };
-    this.saveUser(this.user);
-    this.trips = [];
-    this.wishlist = [];
-    this.currentTripId = null;
-    this.emit('user:updated', this.user);
-    this.emit('trips:updated', this.trips);
   }
 
   saveSettings(settings = this.settings) {
@@ -159,7 +140,7 @@ class StateStore {
 
   saveWishlist(wishlist = this.wishlist) {
     this.wishlist = wishlist;
-    const userKey = this.user && this.user.email ? this.user.email : 'default';
+    const userKey = this.user ? this.user.email : 'default';
     localStorage.setItem(CONFIG.STORAGE_KEY_WISHLIST + '_' + userKey, JSON.stringify(this.wishlist));
     this.emit('wishlist:updated', this.wishlist);
   }
@@ -206,18 +187,7 @@ class StateStore {
     localStorage.removeItem(CONFIG.STORAGE_KEY_USER);
     localStorage.removeItem(CONFIG.STORAGE_KEY_SETTINGS);
     localStorage.removeItem(CONFIG.STORAGE_KEY_WISHLIST);
-    this.user = {
-      id: 'usr-demo-01',
-      name: 'Alex River',
-      email: 'alex.river@globetrotter.io',
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80',
-      bio: 'Avid explorer, foodie, and landscape photographer. 24 countries & counting! 🌍',
-      homeCurrency: 'USD',
-      preferredLanguage: 'English (US)',
-      isLoggedIn: true,
-      registeredAt: '2026-01-15'
-    };
-    this.saveUser(this.user);
+    this.user = this.loadUser();
     this.trips = this.loadTrips();
     this.settings = this.loadSettings();
     this.wishlist = this.loadWishlist();

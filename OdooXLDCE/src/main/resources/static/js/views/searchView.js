@@ -9,6 +9,7 @@ const SearchView = {
   searchQuery: '',
   selectedRegion: 'all',
   selectedCategory: 'all',
+  selectedDuration: 'all', // 'all' | 'short' | 'medium' | 'long'
   selectedMaxCost: 300,
   targetTripContext: null, // { tripId, dayNumber } if opened from builder
 
@@ -17,6 +18,8 @@ const SearchView = {
     if (!container) return;
 
     if (context) this.targetTripContext = context;
+
+    const activeTrip = AppStore.getCurrentTrip();
 
     // Filter Activities
     let activities = CONFIG.ACTIVITIES_CATALOG.filter(act => {
@@ -30,6 +33,14 @@ const SearchView = {
       }
       // Category
       if (this.selectedCategory !== 'all' && act.category !== this.selectedCategory) return false;
+      // Duration filter
+      if (this.selectedDuration !== 'all') {
+        const durStr = (act.duration || '').toLowerCase();
+        const hrs = parseFloat(durStr) || (durStr.includes('min') ? 0.5 : 2.0);
+        if (this.selectedDuration === 'short' && hrs >= 1.75) return false;
+        if (this.selectedDuration === 'medium' && (hrs < 1.75 || hrs > 3.0)) return false;
+        if (this.selectedDuration === 'long' && hrs <= 3.0) return false;
+      }
       // Max cost
       if (act.cost > this.selectedMaxCost) return false;
 
@@ -63,7 +74,7 @@ const SearchView = {
           </div>
           ${this.targetTripContext?.tripId ? `
             <div class="badge badge-emerald" style="padding: 0.5rem 1rem;">
-              🎯 Adding to: ${Utils.escapeHtml(AppStore.getCurrentTrip()?.title || 'Active Trip')}
+              🎯 Target Trip: ${Utils.escapeHtml(AppStore.getCurrentTrip()?.title || 'Active Trip')}
             </div>
           ` : ''}
         </div>
@@ -87,7 +98,7 @@ const SearchView = {
                 <span>🎯</span> Activities (${activities.length})
               </button>
               <button class="tab-btn ${this.currentTab === 'destinations' ? 'active' : ''}" onclick="SearchView.switchTab('destinations')">
-                <span>🏛️</span> Destinations (${destinations.length})
+                <span>🏛️</span> City Destinations (${destinations.length})
               </button>
             </div>
           </div>
@@ -95,22 +106,33 @@ const SearchView = {
           <!-- Dynamic Filter Pills -->
           ${this.currentTab === 'activities' ? `
             <!-- Activity Category Pills & Max Cost -->
-            <div class="flex items-center justify-between" style="flex-wrap: wrap; gap: 1rem;">
-              <div class="search-filter-pills" style="margin-top: 0;">
-                <button class="filter-pill ${this.selectedCategory === 'all' ? 'active' : ''}" onclick="SearchView.setCategory('all')">All Categories</button>
-                ${CONFIG.CATEGORIES.map(cat => `
-                  <button class="filter-pill ${this.selectedCategory === cat.id ? 'active' : ''}" onclick="SearchView.setCategory('${cat.id}')">
-                    ${cat.icon} ${cat.name}
-                  </button>
-                `).join('')}
+            <div class="flex flex-col gap-3">
+              <div class="flex items-center justify-between" style="flex-wrap: wrap; gap: 1rem;">
+                <div class="search-filter-pills" style="margin-top: 0;">
+                  <button class="filter-pill ${this.selectedCategory === 'all' ? 'active' : ''}" onclick="SearchView.setCategory('all')">All Categories</button>
+                  ${CONFIG.CATEGORIES.map(cat => `
+                    <button class="filter-pill ${this.selectedCategory === cat.id ? 'active' : ''}" onclick="SearchView.setCategory('${cat.id}')">
+                      ${cat.icon} ${cat.name}
+                    </button>
+                  `).join('')}
+                </div>
+
+                <!-- Price Filter Slider -->
+                <div class="flex items-center gap-2" style="font-size: 0.825rem; color: var(--text-muted);">
+                  <span>Max Cost:</span>
+                  <input type="range" min="0" max="300" step="10" value="${this.selectedMaxCost}" 
+                    oninput="SearchView.setMaxCost(this.value)" style="cursor: pointer; width: 100px;" />
+                  <span class="font-bold" style="color: var(--accent-emerald);">${Utils.formatCurrency(this.selectedMaxCost, 'USD')}</span>
+                </div>
               </div>
 
-              <!-- Price Filter Slider -->
-              <div class="flex items-center gap-2" style="font-size: 0.825rem; color: var(--text-muted);">
-                <span>Max Cost:</span>
-                <input type="range" min="0" max="300" step="10" value="${this.selectedMaxCost}" 
-                  oninput="SearchView.setMaxCost(this.value)" style="cursor: pointer; width: 100px;" />
-                <span class="font-bold" style="color: var(--accent-emerald);">${Utils.formatCurrency(this.selectedMaxCost, 'USD')}</span>
+              <!-- Duration Filter Bar -->
+              <div class="flex items-center gap-2" style="flex-wrap: wrap;">
+                <span style="font-size: 0.8rem; color: var(--text-subtle); margin-right: 0.25rem;">Duration:</span>
+                <button class="filter-pill ${this.selectedDuration === 'all' ? 'active' : ''}" style="padding: 3px 10px; font-size: 0.75rem;" onclick="SearchView.setDuration('all')">All Durations</button>
+                <button class="filter-pill ${this.selectedDuration === 'short' ? 'active' : ''}" style="padding: 3px 10px; font-size: 0.75rem;" onclick="SearchView.setDuration('short')">⏱️ Short (&lt;1.5 hrs)</button>
+                <button class="filter-pill ${this.selectedDuration === 'medium' ? 'active' : ''}" style="padding: 3px 10px; font-size: 0.75rem;" onclick="SearchView.setDuration('medium')">⏱️ Half-day (1.5-3 hrs)</button>
+                <button class="filter-pill ${this.selectedDuration === 'long' ? 'active' : ''}" style="padding: 3px 10px; font-size: 0.75rem;" onclick="SearchView.setDuration('long')">⏱️ Full-day (3+ hrs)</button>
               </div>
             </div>
           ` : `
@@ -141,11 +163,13 @@ const SearchView = {
           <div class="trips-grid">
             ${activities.map(act => {
               const cat = CONFIG.CATEGORIES.find(c => c.id === act.category) || CONFIG.CATEGORIES[0];
+              const isInTrip = activeTrip && activeTrip.days?.some(d => d.activities?.some(a => a.name === act.name));
 
               return `
                 <div class="glass-card trip-card">
                   <div class="trip-card-header">
-                    <img src="${act.image}" alt="${Utils.escapeHtml(act.name)}" class="trip-card-cover" />
+                    <img src="${act.image}" alt="${Utils.escapeHtml(act.name)}" class="trip-card-cover" 
+                      onerror="this.src='https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=400&q=80'" />
                     <span class="badge badge-primary trip-status-tag">${cat.icon} ${cat.name}</span>
                   </div>
                   <div class="trip-card-body">
@@ -158,13 +182,24 @@ const SearchView = {
                       ${Utils.escapeHtml(act.description)}
                     </p>
                     
-                    <div class="flex items-center justify-between" style="margin-top: auto; padding-top: 0.75rem; border-top: 1px solid var(--glass-border);">
+                    <div class="flex items-center justify-between" style="margin-top: auto; padding-top: 0.75rem; border-top: 1px solid var(--glass-border); gap: 0.5rem; flex-wrap: wrap;">
                       <div style="font-size: 1.15rem; font-weight: 800; color: var(--accent-emerald);">
                         ${act.cost === 0 ? 'Free' : Utils.formatCurrency(act.cost, 'USD')}
                       </div>
-                      <button class="btn btn-primary btn-sm" onclick="SearchView.openAddToTripModal('${act.id}')">
-                        <span>➕</span> Add to Trip
-                      </button>
+                      <div class="flex items-center gap-2">
+                        <button class="btn btn-secondary btn-sm" onclick="SearchView.openActivityQuickView('${act.id}')" title="Preview full details and photo">
+                          👁️ Quick View
+                        </button>
+                        ${isInTrip ? `
+                          <button class="btn btn-secondary btn-sm" style="color: var(--accent-rose); border-color: rgba(244,63,94,0.4);" onclick="SearchView.removeActivityFromActiveTrip('${act.name}')" title="Remove from current trip">
+                            ✓ In Trip (Remove)
+                          </button>
+                        ` : `
+                          <button class="btn btn-primary btn-sm" onclick="SearchView.openAddToTripModal('${act.id}')">
+                            <span>➕</span> Add to Trip
+                          </button>
+                        `}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -172,7 +207,7 @@ const SearchView = {
             }).join('')}
           </div>
         ` : `
-          <!-- Destinations Grid -->
+          <!-- Destinations Grid (City Search) -->
           <div class="destinations-grid">
             ${destinations.map(dest => {
               const isWishlisted = AppStore.wishlist.includes(dest.id);
@@ -182,21 +217,33 @@ const SearchView = {
                   <img src="${dest.image}" alt="${dest.name}" class="destination-card-img" />
                   <div class="destination-card-overlay">
                     <div class="flex items-center justify-between" style="margin-bottom: 0.35rem;">
-                      <span class="badge badge-cyan">${dest.region}</span>
+                      <div class="flex items-center gap-2">
+                        <span class="badge badge-cyan">${dest.region}</span>
+                        <span class="badge badge-primary" style="font-size: 0.7rem;">${dest.costIndex || '$$ Moderate'}</span>
+                      </div>
                       <button class="btn btn-icon btn-sm" style="background: rgba(0,0,0,0.5); color: ${isWishlisted ? 'var(--accent-rose)' : '#fff'};" 
                         onclick="event.stopPropagation(); SearchView.toggleWishlist('${dest.id}')" title="Save to Wishlist">
                         ${isWishlisted ? '❤️' : '🤍'}
                       </button>
                     </div>
                     <h3 style="color: #fff; margin-bottom: 0.25rem;">${dest.name}, ${dest.country}</h3>
+                    <div class="flex items-center gap-3" style="font-size: 0.8rem; color: #fbbf24; margin-bottom: 0.35rem;">
+                      <span>★ ${dest.rating || '4.9'}</span>
+                      <span style="color: #cbd5e1;">&bull; Popularity: ${Math.round((dest.popularity || 0.88) * 100)}%</span>
+                    </div>
                     <p style="font-size: 0.825rem; color: #cbd5e1; margin-bottom: 0.75rem; line-height: 1.3;">${dest.description}</p>
-                    <div class="flex items-center justify-between">
+                    <div class="flex items-center justify-between" style="gap: 0.5rem; flex-wrap: wrap;">
                       <span style="font-size: 0.85rem; color: var(--accent-emerald); font-weight: 600;">
                         Avg ${Utils.formatCurrency(dest.avgDailyCost, 'USD')}/day
                       </span>
-                      <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); DashboardView.planTripToDestination('${dest.id}')">
-                        Plan Journey &rarr;
-                      </button>
+                      <div class="flex items-center gap-2">
+                        <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); SearchView.openAddCityToTripModal('${dest.id}')" title="Add city as a stop to an active trip">
+                          <span>📍</span> Add to Trip
+                        </button>
+                        <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); DashboardView.planTripToDestination('${dest.id}')">
+                          Plan New &rarr;
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -228,6 +275,11 @@ const SearchView = {
     this.render();
   },
 
+  setDuration(duration) {
+    this.selectedDuration = duration;
+    this.render();
+  },
+
   setMaxCost(cost) {
     this.selectedMaxCost = Number(cost);
     this.render();
@@ -237,6 +289,7 @@ const SearchView = {
     this.searchQuery = '';
     this.selectedCategory = 'all';
     this.selectedRegion = 'all';
+    this.selectedDuration = 'all';
     this.selectedMaxCost = 300;
     this.render();
   },
@@ -252,6 +305,171 @@ const SearchView = {
     }
     AppStore.saveWishlist(list);
     this.render();
+  },
+
+  openActivityQuickView(actId) {
+    const act = CONFIG.ACTIVITIES_CATALOG.find(a => a.id === actId);
+    if (!act) return;
+
+    const cat = CONFIG.CATEGORIES.find(c => c.id === act.category) || CONFIG.CATEGORIES[0];
+    const modalHtml = `
+      <div class="modal-header">
+        <div class="modal-title">✨ Experience Quick View</div>
+        <button class="modal-close" onclick="AppRouter.closeModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div style="border-radius: var(--radius-sm); overflow: hidden; height: 220px; margin-bottom: 1.25rem;">
+          <img src="${act.image}" alt="${Utils.escapeHtml(act.name)}" style="width: 100%; height: 100%; object-fit: cover;" />
+        </div>
+        <div class="flex items-center justify-between" style="margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
+          <span class="badge badge-primary">${cat.icon} ${cat.name}</span>
+          <span style="font-size: 0.85rem; color: var(--accent-cyan);">📍 ${Utils.escapeHtml(act.cityName)}</span>
+        </div>
+        <h3 style="font-size: 1.25rem; margin-bottom: 0.5rem;">${Utils.escapeHtml(act.name)}</h3>
+        <p style="font-size: 0.9rem; line-height: 1.5; color: var(--text-muted); margin-bottom: 1.25rem;">
+          ${Utils.escapeHtml(act.description)}
+        </p>
+        <div class="glass-card-subtle flex items-center justify-between" style="padding: 0.75rem 1rem; margin-bottom: 1.25rem;">
+          <div>
+            <div style="font-size: 0.75rem; color: var(--text-subtle);">Estimated Duration</div>
+            <strong>⏱️ ${act.duration}</strong>
+          </div>
+          <div style="text-align: right;">
+            <div style="font-size: 0.75rem; color: var(--text-subtle);">Estimated Cost</div>
+            <strong style="color: var(--accent-emerald); font-size: 1.1rem;">
+              ${act.cost === 0 ? 'Free' : Utils.formatCurrency(act.cost, 'USD')}
+            </strong>
+          </div>
+        </div>
+        <div class="modal-footer" style="padding: 0;">
+          <button class="btn btn-secondary" onclick="AppRouter.closeModal()">Close</button>
+          <button class="btn btn-primary" onclick="AppRouter.closeModal(); SearchView.openAddToTripModal('${act.id}')">
+            <span>➕</span> Add to My Trip
+          </button>
+        </div>
+      </div>
+    `;
+    AppRouter.openModal(modalHtml);
+  },
+
+  openAddCityToTripModal(destId) {
+    const dest = CONFIG.DESTINATIONS.find(d => d.id === destId);
+    if (!dest) return;
+
+    const trips = AppStore.trips;
+    if (trips.length === 0) {
+      Utils.showToast('Please create a trip first to add destination stops.', 'warning');
+      AppRouter.navigate('create-trip');
+      return;
+    }
+
+    const defaultTrip = AppStore.getCurrentTrip() || trips[0];
+
+    const modalHtml = `
+      <div class="modal-header">
+        <div class="modal-title">📍 Add City Stop to Journey</div>
+        <button class="modal-close" onclick="AppRouter.closeModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="glass-card-subtle flex items-center gap-3" style="margin-bottom: 1.25rem;">
+          <img src="${dest.image}" style="width: 65px; height: 65px; border-radius: var(--radius-xs); object-fit: cover;" />
+          <div>
+            <div class="font-bold" style="font-size: 1rem;">${Utils.escapeHtml(dest.name)}, ${Utils.escapeHtml(dest.country)}</div>
+            <div style="font-size: 0.8rem; color: var(--text-muted);">${dest.region} &bull; Cost Index: ${dest.costIndex || '$$ Moderate'}</div>
+            <div style="font-size: 0.75rem; color: var(--accent-emerald);">Avg Spend: ${Utils.formatCurrency(dest.avgDailyCost, 'USD')}/day</div>
+          </div>
+        </div>
+
+        <form id="form-add-city-stop" onsubmit="SearchView.handleAddCityStopSubmit(event, '${dest.name}', '${dest.country}')">
+          <div class="form-group">
+            <label class="form-label">Select Destination Trip</label>
+            <select id="select-city-trip" class="form-control" onchange="SearchView.updateCityTripDates(this.value)">
+              ${trips.map(t => `<option value="${t.id}" ${t.id === defaultTrip.id ? 'selected' : ''}>${Utils.escapeHtml(t.title)} (${Utils.escapeHtml(t.destination)})</option>`).join('')}
+            </select>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Stop Arrival Date</label>
+              <input type="date" id="select-city-arrival" class="form-control" required value="${defaultTrip.startDate}" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Stop Departure Date</label>
+              <input type="date" id="select-city-departure" class="form-control" required value="${defaultTrip.endDate}" />
+            </div>
+          </div>
+
+          <div class="modal-footer" style="padding-left: 0; padding-right: 0; margin-bottom: -0.5rem;">
+            <button type="button" class="btn btn-secondary" onclick="AppRouter.closeModal()">Cancel</button>
+            <button type="submit" class="btn btn-primary">Add Stop to Trip</button>
+          </div>
+        </form>
+      </div>
+    `;
+    AppRouter.openModal(modalHtml);
+  },
+
+  updateCityTripDates(tripId) {
+    const trip = AppStore.trips.find(t => t.id === tripId);
+    if (!trip) return;
+    const arr = document.getElementById('select-city-arrival');
+    const dep = document.getElementById('select-city-departure');
+    if (arr) arr.value = trip.startDate;
+    if (dep) dep.value = trip.endDate;
+  },
+
+  async handleAddCityStopSubmit(event, cityName, country) {
+    event.preventDefault();
+    const tripId = document.getElementById('select-city-trip').value;
+    const arrival = document.getElementById('select-city-arrival').value;
+    const departure = document.getElementById('select-city-departure').value;
+
+    if (departure < arrival) {
+      Utils.showToast('Departure date must be after Arrival date.', 'error');
+      return;
+    }
+
+    const trip = AppStore.trips.find(t => t.id === tripId);
+    if (!trip) return;
+
+    if (!trip.stops) trip.stops = [];
+    trip.stops.push({
+      id: 'stop-' + Date.now(),
+      cityName: cityName,
+      country: country,
+      arrivalDate: arrival,
+      departureDate: departure,
+      timeZone: 'UTC'
+    });
+
+    try {
+      await MockApi.updateTrip(tripId, { stops: trip.stops });
+      AppRouter.closeModal();
+      Utils.showToast(`Stop "${cityName}" successfully added to "${trip.title}"!`, 'success');
+      AppRouter.navigate('itinerary-builder', tripId);
+    } catch (err) {
+      Utils.showToast(err.message || 'Failed to add stop.', 'error');
+    }
+  },
+
+  async removeActivityFromActiveTrip(actName) {
+    const activeTrip = AppStore.getCurrentTrip();
+    if (!activeTrip) return;
+
+    let removed = false;
+    activeTrip.days.forEach(day => {
+      const idx = day.activities.findIndex(a => a.name === actName);
+      if (idx !== -1) {
+        day.activities.splice(idx, 1);
+        removed = true;
+      }
+    });
+
+    if (removed) {
+      await MockApi.updateTrip(activeTrip.id, { days: activeTrip.days });
+      Utils.showToast(`Removed "${actName}" from ${activeTrip.title}.`, 'info');
+      this.render();
+    }
   },
 
   openAddToTripModal(actId) {
@@ -338,6 +556,7 @@ const SearchView = {
     try {
       await MockApi.addActivity(tripId, dayNumber, {
         name: act.name,
+        cityName: act.cityName,
         category: act.category,
         cost: act.cost,
         startTime,

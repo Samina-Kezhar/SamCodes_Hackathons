@@ -43,13 +43,17 @@ const AuthView = {
             <button type="submit" id="btn-login-submit" class="btn btn-primary w-full btn-lg" style="margin-top: 0.5rem;">
               Sign In to GlobeTrotter
             </button>
+
+            <div style="text-align: center; margin-top: 1rem; font-size: 0.85rem; color: var(--text-muted);">
+              Don't have an account? <a href="javascript:void(0)" onclick="AuthView.switchTab('signup')" style="font-weight: 600; color: var(--primary-400);">Create an account (Sign Up) &rarr;</a>
+            </div>
           </form>
 
           <!-- Signup Form (Initially hidden) -->
           <form id="form-signup" class="hidden" onsubmit="AuthView.handleSignup(event)">
             <div class="form-group">
               <label class="form-label" for="signup-name">Full Name <span class="required">*</span></label>
-              <input type="text" id="signup-name" class="form-control" placeholder="e.g. Alex River" required />
+              <input type="text" id="signup-name" class="form-control" placeholder="Alex River" required />
               <div class="form-error hidden" id="signup-name-error"></div>
             </div>
 
@@ -78,13 +82,17 @@ const AuthView = {
             <button type="submit" id="btn-signup-submit" class="btn btn-primary w-full btn-lg" style="margin-top: 0.5rem;">
               Create Free Account
             </button>
+
+            <div style="text-align: center; margin-top: 1rem; font-size: 0.85rem; color: var(--text-muted);">
+              Already have an account? <a href="javascript:void(0)" onclick="AuthView.switchTab('login')" style="font-weight: 600; color: var(--primary-400);">&larr; Log In to your account</a>
+            </div>
           </form>
 
           <!-- Quick Demo Access Box for Judges/Testers -->
           <div class="demo-login-box">
-            <p style="font-size: 0.825rem; margin-bottom: 0.5rem; color: var(--primary-300);"><strong>⚡ Fast Track Demo Access:</strong></p>
+            <p style="font-size: 0.8rem; margin-bottom: 0.5rem; color: var(--primary-300);"><strong>⚡ Fast Track Demo Access:</strong></p>
             <button type="button" class="btn btn-secondary btn-sm w-full" onclick="AuthView.quickDemoLogin()">
-              🚀 Explore with Preloaded Demo Account (Alex River)
+              Explore with Preloaded Demo Account
             </button>
           </div>
 
@@ -98,15 +106,10 @@ const AuthView = {
 
   switchTab(tab) {
     const isLogin = tab === 'login';
-    const loginTab = document.getElementById('auth-tab-login');
-    const signupTab = document.getElementById('auth-tab-signup');
-    const loginForm = document.getElementById('form-login');
-    const signupForm = document.getElementById('form-signup');
-
-    if (loginTab) loginTab.classList.toggle('active', isLogin);
-    if (signupTab) signupTab.classList.toggle('active', !isLogin);
-    if (loginForm) loginForm.classList.toggle('hidden', !isLogin);
-    if (signupForm) signupForm.classList.toggle('hidden', isLogin);
+    document.getElementById('auth-tab-login').classList.toggle('active', isLogin);
+    document.getElementById('auth-tab-signup').classList.toggle('active', !isLogin);
+    document.getElementById('form-login').classList.toggle('hidden', !isLogin);
+    document.getElementById('form-signup').classList.toggle('hidden', isLogin);
   },
 
   checkPasswordStrength(password) {
@@ -163,13 +166,18 @@ const AuthView = {
     try {
       await MockApi.login(email, password);
       Utils.showToast(`Welcome back, ${AppStore.user.name}! 🚀`, 'success');
-      if (AppStore.trips.length === 0) {
-        AppRouter.navigate('create-trip');
-      } else {
-        AppRouter.navigate('dashboard');
-      }
+      AppRouter.navigate('dashboard');
     } catch (err) {
-      Utils.showToast(err.message || 'Login failed. Please verify your credentials.', 'error');
+      if (err.notFound) {
+        Utils.showToast(err.message, 'warning', 'Account Not Found');
+        this.switchTab('signup');
+        const signupEmail = document.getElementById('signup-email');
+        if (signupEmail) signupEmail.value = email;
+        const signupName = document.getElementById('signup-name');
+        if (signupName) signupName.focus();
+      } else {
+        Utils.showToast(err.message || 'Login failed. Please verify your credentials.', 'error');
+      }
     } finally {
       btn.classList.remove('btn-loading');
     }
@@ -203,12 +211,19 @@ const AuthView = {
     btn.classList.add('btn-loading');
     try {
       await MockApi.signup(name, email, password);
-      Utils.showToast(`Account created! Welcome to GlobeTrotter, ${name}! 🎉`, 'success');
-      AppRouter.navigate('create-trip');
+      Utils.showToast('Account created successfully! Welcome to GlobeTrotter 🎉', 'success');
+      AppRouter.navigate('dashboard');
     } catch (err) {
       // Handles 409 Conflict gracefully
       if (err.status === 409) {
-        Utils.showToast(err.message, 'warning', 'Email Already Exists (409 Conflict)');
+        Utils.showToast(err.message || 'Account already exists. Switching to login...', 'warning', 'Account Already Exists');
+        this.switchTab('login');
+        const loginEmail = document.getElementById('login-email');
+        const loginPass = document.getElementById('login-password');
+        if (loginEmail) loginEmail.value = email;
+        if (loginPass) {
+          loginPass.focus();
+        }
       } else {
         Utils.showToast(err.message || 'Signup failed.', 'error');
       }

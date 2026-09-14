@@ -17,25 +17,31 @@ class StateStore {
 
   loadUser() {
     try {
+      const sessionActive = sessionStorage.getItem('globetrotter_active_session');
       const stored = localStorage.getItem(CONFIG.STORAGE_KEY_USER);
-      if (stored) return JSON.parse(stored);
+      if (sessionActive && stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed && typeof parsed.isLoggedIn === 'boolean' && parsed.isLoggedIn) {
+          return parsed;
+        }
+      }
     } catch (e) {
       console.warn('Failed to parse user from localStorage', e);
     }
-    // Default demo user Alex River
-    const defaultUser = {
-      id: 'usr-demo-01',
-      name: 'Alex River',
-      email: 'alex.river@globetrotter.io',
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80',
-      bio: 'Avid explorer, foodie, and landscape photographer. 24 countries & counting! 🌍',
-      homeCurrency: 'USD',
-      preferredLanguage: 'English (US)',
-      isLoggedIn: true,
-      registeredAt: '2026-01-15'
+    // When a user opens the website, ask for login or signup
+    return {
+      isLoggedIn: false
     };
-    this.saveUser(defaultUser);
-    return defaultUser;
+  }
+
+  logout() {
+    sessionStorage.removeItem('globetrotter_active_session');
+    localStorage.removeItem(CONFIG.STORAGE_KEY_USER);
+    this.user = { isLoggedIn: false };
+    this.emit('user:updated', this.user);
+    if (typeof AppRouter !== 'undefined') {
+      AppRouter.navigate('auth');
+    }
   }
 
   loadTrips() {
@@ -116,6 +122,9 @@ class StateStore {
   }
 
   switchUser(user) {
+    if (user && user.isLoggedIn) {
+      sessionStorage.setItem('globetrotter_active_session', user.email || 'active');
+    }
     this.saveUser(user);
     this.trips = this.loadTrips();
     this.wishlist = this.loadWishlist();

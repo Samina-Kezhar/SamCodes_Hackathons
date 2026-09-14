@@ -40,8 +40,8 @@ class ApiClient {
 
       if (!response.ok) {
         // If the server returns an error but it's not JSON (e.g., Python http.server returning 501/404 HTML pages),
-        // it means the Spring Boot API is not actually running. Treat it as a network error to trigger local fallback.
-        if (!isJson) {
+        // or returns 501 Not Implemented, it means the Spring Boot API is not actually running. Treat it as a network error to trigger local fallback.
+        if (!isJson || response.status === 501 || (response.status === 404 && !data)) {
           this.isBackendAvailable = false;
           throw { status: 0, isNetworkError: true, message: 'Backend service offline. Using local storage.' };
         }
@@ -58,37 +58,74 @@ class ApiClient {
     }
   }
 
+  _getUsersDb() {
+    try {
+      const stored = localStorage.getItem('globetrotter_users_db');
+      if (stored) return JSON.parse(stored);
+    } catch (e) {}
+    const defaultDb = {
+      'alex.river@globetrotter.io': {
+        id: 'usr-demo-01',
+        name: 'Alex River',
+        email: 'alex.river@globetrotter.io',
+        password: 'DemoPassword123!',
+        avatar: (typeof CONFIG !== 'undefined' && CONFIG.AVATAR_PRESETS) ? CONFIG.AVATAR_PRESETS[0] : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80',
+        bio: 'Avid explorer, foodie, and landscape photographer. 24 countries & counting! 🌍',
+        homeCurrency: 'USD',
+        preferredLanguage: 'English (US)',
+        isLoggedIn: true,
+        registeredAt: '2026-01-15'
+      }
+    };
+    try {
+      localStorage.setItem('globetrotter_users_db', JSON.stringify(defaultDb));
+    } catch (e) {}
+    return defaultDb;
+  }
+
+  _saveUsersDb(db) {
+    try {
+      localStorage.setItem('globetrotter_users_db', JSON.stringify(db));
+    } catch (e) {}
+  }
+
   // Auth Endpoints
   async login(email, password) {
+    const normalized = email.trim().toLowerCase();
     try {
       const res = await this._fetch('/auth/login', {
         method: 'POST',
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ email: normalized, password })
       });
-      const user = {
-        id: 'usr-' + btoa(email).slice(0,10),
+      const db = this._getUsersDb();
+      const existing = db[normalized];
+      const user = existing || {
+        id: 'usr-' + btoa(normalized).slice(0,10),
         name: email.split('@')[0].replace('.', ' ').replace(/\b\w/g, l => l.toUpperCase()),
-        email: email,
+        email: normalized,
         avatar: CONFIG.AVATAR_PRESETS[0],
         bio: 'Explorer ready for new adventures! 🌍',
         homeCurrency: 'USD',
         preferredLanguage: 'English (US)',
         isLoggedIn: true
       };
+      if (!existing) {
+        db[normalized] = { ...user, password };
+        this._saveUsersDb(db);
+      }
       AppStore.switchUser(user);
       return { status: 200, data: user };
     } catch (err) {
       if (err.isNetworkError) {
-        const user = {
-          id: 'usr-' + btoa(email).slice(0,10),
-          name: email.split('@')[0].replace('.', ' ').replace(/\b\w/g, l => l.toUpperCase()),
-          email: email,
-          avatar: CONFIG.AVATAR_PRESETS[0],
-          bio: 'Explorer ready for new adventures! 🌍',
-          homeCurrency: 'USD',
-          preferredLanguage: 'English (US)',
-          isLoggedIn: true
-        };
+        const db = this._getUsersDb();
+        let user = db[normalized];
+        if (!user) {
+          throw { status: 404, notFound: true, message: `No account found for '${email}'. Please create an account in Sign Up.` };
+        }
+        if (user.password && user.password !== password) {
+          throw { status: 401, message: 'Incorrect password for this account. Please try again.' };
+        }
+        user.isLoggedIn = true;
         AppStore.switchUser(user);
         return { status: 200, data: user };
       }
@@ -97,23 +134,28 @@ class ApiClient {
   }
 
   async signup(name, email, password) {
-    if (email.toLowerCase().includes('taken') || email.toLowerCase() === 'existing@example.com') {
+    const normalized = email.trim().toLowerCase();
+    const db = this._getUsersDb();
+
+    // Check if account already exists in local DB or demo emails
+    if (db[normalized] || normalized.includes('taken') || normalized === 'existing@example.com') {
       throw { status: 409, message: `The email address '${email}' is already registered. Please login instead.` };
     }
 
     try {
       await this._fetch('/auth/signup', {
         method: 'POST',
-        body: JSON.stringify({ name, email, password })
+        body: JSON.stringify({ name: name.trim(), email: normalized, password })
       });
     } catch (err) {
       if (!err.isNetworkError && err.status === 409) throw err;
     }
 
     const newUser = {
-      id: 'usr-' + btoa(email).slice(0,10),
+      id: 'usr-' + btoa(normalized).slice(0,10),
       name: name.trim(),
-      email: email.trim().toLowerCase(),
+      email: normalized,
+      password: password,
       avatar: CONFIG.AVATAR_PRESETS[0],
       bio: 'New explorer eager to chart custom routes! 🌍',
       homeCurrency: 'USD',
@@ -122,9 +164,13 @@ class ApiClient {
       registeredAt: new Date().toISOString().split('T')[0]
     };
     
+    // Save to local registered accounts DB
+    db[normalized] = newUser;
+    this._saveUsersDb(db);
+
     AppStore.switchUser(newUser);
     
-    // For a brand new signup, ensure they have zero trips explicitly, rather than loading legacy demo ones
+    // Brand new user starts with an empty trips slate
     AppStore.trips = [];
     AppStore.saveTrips(AppStore.trips);
     
@@ -157,7 +203,31 @@ class ApiClient {
   }
 
   async createTrip(tripData) {
-    const days = this._generateDaysBetween(tripData.startDate, tripData.endDate, tripData.destination);
+    let days = tripData.days;
+    let coverImage = tripData.coverImage || CONFIG.COVER_PRESETS[0].url;
+    let currency = tripData.currency || 'USD';
+    let budget = Number(tripData.budget) || 0;
+
+    // Auto-generate days with rich activities if not explicitly provided or if autoGenerate is true
+    if (!days || days.length === 0 || tripData.autoGenerate) {
+      if (typeof ItineraryGenerator !== 'undefined') {
+        const duration = Utils.daysBetween(tripData.startDate, tripData.endDate);
+        const generated = ItineraryGenerator.generate(tripData.destination, duration, tripData.startDate);
+        days = generated.days;
+        if (!tripData.coverImage || tripData.coverImage === CONFIG.COVER_PRESETS[0].url) {
+          coverImage = generated.coverImage;
+        }
+        if (!tripData.budget || Number(tripData.budget) <= 0) {
+          budget = generated.budget;
+        }
+        if (!tripData.currency) {
+          currency = generated.currency;
+        }
+      } else {
+        days = this._generateDaysBetween(tripData.startDate, tripData.endDate, tripData.destination);
+      }
+    }
+
     const newTrip = {
       id: 'trip-' + Date.now(),
       title: tripData.title || 'My New Journey',
@@ -165,9 +235,9 @@ class ApiClient {
       destination: tripData.destination || 'Global',
       startDate: tripData.startDate,
       endDate: tripData.endDate,
-      budget: Number(tripData.budget) || 0,
-      currency: tripData.currency || 'USD',
-      coverImage: tripData.coverImage || CONFIG.COVER_PRESETS[0].url,
+      budget: budget,
+      currency: currency,
+      coverImage: coverImage,
       tags: tripData.tags || ['Adventure'],
       stops: tripData.stops || [
         {
@@ -181,6 +251,11 @@ class ApiClient {
       ],
       days: days
     };
+
+    // Immediately persist to local state for instantaneous responsiveness
+    const updated = [newTrip, ...AppStore.trips];
+    AppStore.saveTrips(updated);
+    AppStore.setCurrentTripId(newTrip.id);
 
     try {
       const res = await this._fetch('/trips', {
@@ -198,12 +273,13 @@ class ApiClient {
           coverPhoto: newTrip.coverImage
         })
       });
-      if (res.data?.id) newTrip.id = res.data.id;
+      if (res.data?.id && res.data.id !== newTrip.id) {
+        newTrip.id = res.data.id;
+        AppStore.saveTrips(AppStore.trips);
+        AppStore.setCurrentTripId(newTrip.id);
+      }
     } catch (err) {}
 
-    const updated = [newTrip, ...AppStore.trips];
-    AppStore.saveTrips(updated);
-    AppStore.setCurrentTripId(newTrip.id);
     return { status: 201, data: newTrip };
   }
 

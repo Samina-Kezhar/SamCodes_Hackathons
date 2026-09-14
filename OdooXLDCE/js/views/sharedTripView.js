@@ -1,7 +1,6 @@
 /**
  * Screen 11: Shared / Public Itinerary View Screen
  * Read-only shareable itinerary presentation, 1-click trip cloning, clipboard copy, and social sharing.
- * Displays day-by-day breakdown with images, times, locations, and activities.
  */
 
 const SharedTripView = {
@@ -10,17 +9,6 @@ const SharedTripView = {
     if (!container) return;
 
     const currentId = tripId || AppStore.currentTripId;
-    if (!currentId) {
-      container.innerHTML = `
-        <div class="empty-state">
-          <div class="empty-state-icon">🌐</div>
-          <h3>No public trip available</h3>
-          <button class="btn btn-primary" onclick="AppRouter.navigate('auth')">Go to GlobeTrotter</button>
-        </div>
-      `;
-      return;
-    }
-
     const response = await MockApi.getTripById(currentId);
     const trip = response.data;
 
@@ -29,29 +17,23 @@ const SharedTripView = {
     const shareUrl = `${window.location.origin}${window.location.pathname}#shared-trip?id=${trip.id}`;
 
     container.innerHTML = `
-      <div class="animate-fade-in" style="max-width: 1020px; margin: 0 auto;">
+      <div class="animate-fade-in" style="max-width: 980px; margin: 0 auto;">
         <!-- Public Share Notice Banner -->
         <div class="alert-banner alert-info flex items-center justify-between" style="flex-wrap: wrap; gap: 0.75rem;">
           <div class="flex items-center gap-2">
             <span>🌐</span>
             <div><strong>Public Presentation Mode:</strong> Anyone with this link can view this curated itinerary and copy it to their own profile.</div>
           </div>
-          ${AppStore.user?.isLoggedIn ? `
-            <button class="btn btn-secondary btn-sm" onclick="AppRouter.navigate('itinerary-builder', '${trip.id}')">
-              &larr; Return to Edit Mode
-            </button>
-          ` : `
-            <button class="btn btn-primary btn-sm" onclick="AppRouter.navigate('auth')">
-              Sign In / Sign Up
-            </button>
-          `}
+          <button class="btn btn-secondary btn-sm" onclick="AppRouter.navigate('itinerary-builder', '${trip.id}')">
+            &larr; Return to Edit Mode
+          </button>
         </div>
 
         <!-- Hero Cover Header -->
         <div class="shared-trip-hero">
           <img src="${trip.coverImage || CONFIG.COVER_PRESETS[0].url}" alt="${Utils.escapeHtml(trip.title)}" class="shared-trip-hero-img" />
           <div class="shared-hero-overlay">
-            <div class="flex items-center gap-2" style="margin-bottom: 0.5rem; flex-wrap: wrap;">
+            <div class="flex items-center gap-2" style="margin-bottom: 0.5rem;">
               <span class="badge badge-cyan">🌍 Verified Itinerary</span>
               <span class="badge badge-primary">${duration} Days</span>
               <span class="badge badge-emerald">Budget: ${Utils.formatCurrency(trip.budget, trip.currency)}</span>
@@ -60,10 +42,10 @@ const SharedTripView = {
             <p style="color: #cbd5e1; font-size: 1rem; max-width: 680px; margin-bottom: 1.25rem;">
               ${Utils.escapeHtml(trip.description || 'A curated multi-city adventure with day-by-day activities.')}
             </p>
-            <div class="flex items-center gap-3" style="font-size: 0.85rem; color: #94a3b8; flex-wrap: wrap;">
+            <div class="flex items-center gap-3" style="font-size: 0.85rem; color: #94a3b8;">
               <span>🗓️ ${Utils.formatDate(trip.startDate)} - ${Utils.formatDate(trip.endDate)}</span>
               <span>📍 ${Utils.escapeHtml(trip.destination)}</span>
-              <span>👤 Created with GlobeTrotter</span>
+              <span>👤 Created by Alex River</span>
             </div>
           </div>
         </div>
@@ -91,24 +73,20 @@ const SharedTripView = {
           </button>
         </div>
 
-        <!-- Itinerary Schedule Days (Day-by-Day Breakdown) -->
+        <!-- Itinerary Schedule Days -->
         <div class="flex flex-col gap-5">
-          ${trip.days.map((day, dayIndex) => {
+          ${trip.days.map(day => {
             const dayCost = day.activities.reduce((sum, a) => sum + (Number(a.cost) || 0), 0);
-            const dayColors = ['var(--primary-500)', 'var(--accent-cyan)', 'var(--accent-emerald)', 'var(--accent-amber)', 'var(--accent-rose)', '#a78bfa', '#34d399', '#f472b6'];
-            const accentColor = dayColors[dayIndex % dayColors.length];
 
             return `
-              <div class="glass-card" style="padding: 1.5rem; border-left: 4px solid ${accentColor};">
-                <div class="flex items-center justify-between" style="margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--glass-border); flex-wrap: wrap; gap: 0.75rem;">
+              <div class="glass-card" style="padding: 1.5rem;">
+                <div class="flex items-center justify-between" style="margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--glass-border);">
                   <div class="flex items-center gap-3">
-                    <span class="day-number-badge" style="background: ${accentColor};">Day ${day.dayNumber}</span>
-                    <h3 style="font-size: 1.15rem; margin-bottom: 0;">${Utils.formatDate(day.date)}</h3>
-                    <span style="font-size: 0.825rem; color: var(--accent-cyan); font-weight: 500;">📍 ${Utils.escapeHtml(day.city || trip.destination)}</span>
+                    <span class="day-number-badge">Day ${day.dayNumber}</span>
+                    <h3 style="font-size: 1.15rem;">${Utils.formatDate(day.date)}</h3>
+                    <span style="font-size: 0.825rem; color: var(--accent-cyan);">📍 ${Utils.escapeHtml(day.city || trip.destination)}</span>
                   </div>
-                  <span class="badge badge-emerald" style="font-size: 0.85rem;">
-                    ${Utils.formatCurrency(dayCost, trip.currency)}
-                  </span>
+                  <span class="font-bold" style="color: var(--accent-emerald);">${Utils.formatCurrency(dayCost, trip.currency)}</span>
                 </div>
 
                 ${day.activities.length === 0 ? `
@@ -117,32 +95,19 @@ const SharedTripView = {
                   <div class="flex flex-col gap-3">
                     ${day.activities.map(act => {
                       const cat = CONFIG.CATEGORIES.find(c => c.id === act.category) || CONFIG.CATEGORIES[0];
-                      const actImg = act.image || 'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?auto=format&fit=crop&w=600&q=80';
-
                       return `
-                        <div class="activity-item" style="padding: 0.85rem 1.25rem;">
-                          <!-- Activity Thumbnail -->
-                          <img src="${actImg}" alt="${Utils.escapeHtml(act.name)}" class="activity-thumb" />
-
-                          <!-- Activity Info -->
-                          <div class="activity-info">
-                            <div class="flex items-center gap-2" style="margin-bottom: 2px; flex-wrap: wrap;">
-                              <span style="font-size: 1.1rem;">${cat.icon}</span>
-                              <span class="activity-name">${Utils.escapeHtml(act.name)}</span>
-                              <span class="badge" style="background: rgba(255,255,255,0.06); font-size: 0.7rem;">${cat.name}</span>
-                            </div>
-                            <div class="activity-meta">
-                              ${act.location ? `<span style="color: var(--accent-cyan);">📍 ${Utils.escapeHtml(act.location)}</span>` : ''}
+                        <div class="activity-item" style="padding: 0.85rem 1rem;">
+                          <div style="font-size: 1.4rem;">${cat.icon}</div>
+                          <div style="flex: 1;">
+                            <div class="font-semibold" style="font-size: 0.925rem; color: var(--text-main);">${Utils.escapeHtml(act.name)}</div>
+                            <div class="flex items-center gap-3" style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;">
+                              ${act.location ? `<span>📍 ${Utils.escapeHtml(act.location)}</span>` : ''}
                               ${act.notes ? `<span>📝 ${Utils.escapeHtml(act.notes)}</span>` : ''}
                             </div>
                           </div>
-
-                          <!-- Time & Cost -->
-                          <div style="text-align: right; flex-shrink: 0;">
-                            <span class="activity-time-tag">⏱️ ${act.startTime} - ${act.endTime}</span>
-                            <div class="activity-cost-tag" style="margin-top: 4px;">
-                              ${act.cost > 0 ? Utils.formatCurrency(act.cost, trip.currency) : 'Free'}
-                            </div>
+                          <div style="text-align: right;">
+                            <span class="activity-time-tag">${act.startTime} - ${act.endTime}</span>
+                            <div class="activity-cost-tag" style="margin-top: 3px;">${Utils.formatCurrency(act.cost, trip.currency)}</div>
                           </div>
                         </div>
                       `;
@@ -179,12 +144,6 @@ const SharedTripView = {
   },
 
   async cloneToMyAccount(tripId) {
-    if (!AppStore.user?.isLoggedIn) {
-      Utils.showToast('Please log in or sign up to copy this itinerary to your account.', 'warning');
-      AppRouter.navigate('auth');
-      return;
-    }
-
     try {
       const res = await MockApi.cloneTrip(tripId);
       Utils.showToast(`Itinerary cloned to your account as "${res.data.title}"!`, 'success');

@@ -81,32 +81,27 @@ const AppRouter = {
       if (id) params = id;
     }
 
-    // Route guard: If not logged in and not on auth, allow only auth or public shared trip
-    const isLoggedIn = Boolean(AppStore.user && AppStore.user.isLoggedIn);
-    if (!isLoggedIn && route !== 'auth' && route !== 'shared-trip') {
+    // Route guard: If not logged in and not on auth, force auth screen
+    if (!AppStore.user?.isLoggedIn && route !== 'auth' && route !== 'shared-trip') {
       route = 'auth';
-      window.location.hash = '#auth';
-      return;
-    }
-
-    // If logged in and on auth page, redirect to dashboard or create-trip
-    if (isLoggedIn && route === 'auth') {
-      route = 'dashboard';
-      window.location.hash = '#dashboard';
-      return;
+      if (window.location.hash !== '#auth') {
+        try {
+          window.history.replaceState(null, '', '#auth');
+        } catch (e) {
+          window.location.hash = '#auth';
+        }
+      }
     }
 
     this.currentRoute = route;
-    const view = this.routes[route] || (isLoggedIn ? DashboardView : AuthView);
+    this.updateUserNavbar(AppStore.user);
+    const view = this.routes[route] || DashboardView;
 
     // Update active nav items
     this.updateActiveNavLinks(route);
 
     // Update Breadcrumbs
     this.updateBreadcrumbs(route);
-
-    // Update UI elements visibility
-    this.updateUserNavbar(AppStore.user);
 
     // Render View
     try {
@@ -146,8 +141,17 @@ const AppRouter = {
   },
 
   updateUserNavbar(user) {
-    const isLoggedIn = Boolean(user && user.isLoggedIn);
+    const isLoggedIn = !!user?.isLoggedIn;
     
+    // Toggle layout container classes for authenticated vs auth-wall state
+    const sidebar = document.getElementById('sidebar');
+    const mainWrapper = document.getElementById('main-wrapper');
+    const topbar = document.getElementById('topbar');
+    
+    if (sidebar) sidebar.style.display = isLoggedIn ? 'flex' : 'none';
+    if (mainWrapper) mainWrapper.style.marginLeft = isLoggedIn ? '' : '0';
+    if (topbar) topbar.style.display = isLoggedIn ? 'flex' : 'none';
+
     // Toggle visibility of authenticated-only UI elements
     const authElements = [
       '.sidebar-nav',
@@ -163,18 +167,6 @@ const AppRouter = {
         el.style.display = isLoggedIn ? '' : 'none';
       });
     });
-
-    const sidebar = document.getElementById('sidebar');
-    const mainWrapper = document.getElementById('main-wrapper');
-    if (sidebar && mainWrapper) {
-      if (!isLoggedIn) {
-        sidebar.style.display = 'none';
-        mainWrapper.style.marginLeft = '0';
-      } else {
-        sidebar.style.display = '';
-        mainWrapper.style.marginLeft = '';
-      }
-    }
 
     // Update user profile info in sidebar
     const nameEl = document.getElementById('user-sidebar-name');

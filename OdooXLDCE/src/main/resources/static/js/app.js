@@ -81,12 +81,20 @@ const AppRouter = {
       if (id) params = id;
     }
 
-    // Route guard: If not logged in and not on auth, allow guest or route
+    // Route guard: If not logged in and not on auth, force auth screen
     if (!AppStore.user?.isLoggedIn && route !== 'auth' && route !== 'shared-trip') {
       route = 'auth';
+      if (window.location.hash !== '#auth') {
+        try {
+          window.history.replaceState(null, '', '#auth');
+        } catch (e) {
+          window.location.hash = '#auth';
+        }
+      }
     }
 
     this.currentRoute = route;
+    this.updateUserNavbar(AppStore.user);
     const view = this.routes[route] || DashboardView;
 
     // Update active nav items
@@ -135,6 +143,15 @@ const AppRouter = {
   updateUserNavbar(user) {
     const isLoggedIn = !!user?.isLoggedIn;
     
+    // Toggle layout container classes for authenticated vs auth-wall state
+    const sidebar = document.getElementById('sidebar');
+    const mainWrapper = document.getElementById('main-wrapper');
+    const topbar = document.getElementById('topbar');
+    
+    if (sidebar) sidebar.style.display = isLoggedIn ? 'flex' : 'none';
+    if (mainWrapper) mainWrapper.style.marginLeft = isLoggedIn ? '' : '0';
+    if (topbar) topbar.style.display = isLoggedIn ? 'flex' : 'none';
+
     // Toggle visibility of authenticated-only UI elements
     const authElements = [
       '.sidebar-nav',

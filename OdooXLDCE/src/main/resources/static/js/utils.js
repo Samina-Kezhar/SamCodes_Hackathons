@@ -247,5 +247,14 @@ const Utils = {
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#039;');
+  },
+
+  capitalize(str) {
+    if (!str || typeof str !== 'string') return '';
+    return str
+      .split(' ')
+      .map(w => w.length > 0 ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : '')
+      .join(' ');
   }
 };
+

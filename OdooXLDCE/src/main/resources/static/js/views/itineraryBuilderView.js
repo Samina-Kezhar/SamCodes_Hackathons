@@ -11,7 +11,7 @@ const ItineraryBuilderView = {
     const container = document.getElementById('view-container');
     if (!container) return;
 
-    const currentId = tripId || AppStore.currentTripId;
+    const currentId = tripId || AppStore.currentTripId || (AppStore.trips && AppStore.trips.length > 0 ? AppStore.trips[0].id : null);
     if (!currentId) {
       container.innerHTML = `<div class="empty-state"><h3>No trip selected</h3><button class="btn btn-primary" onclick="AppRouter.navigate('create-trip')">Create Trip</button></div>`;
       return;
@@ -88,9 +88,9 @@ const ItineraryBuilderView = {
                 const borderColor = dayColors[dayIndex % dayColors.length];
 
                 return `
-                  <div class="day-card ${conflictData.hasConflict ? 'has-conflict' : ''}" id="day-card-${day.dayNumber}"
-                    style="border-left: 4px solid ${borderColor}; margin-bottom: 1.5rem; border-radius: var(--radius-md); overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.18);">
-                    <div class="day-card-header" style="background: linear-gradient(90deg, rgba(0,0,0,0.25) 0%, transparent 100%); padding: 1rem 1.25rem;">
+                  <div class="itinerary-day-box day-card ${conflictData.hasConflict ? 'has-conflict' : ''}" id="day-card-${day.dayNumber}"
+                    style="border-left: 5px solid ${borderColor}; margin-bottom: 2rem;">
+                    <div class="day-card-header itinerary-day-box-header" style="background: linear-gradient(90deg, rgba(0,0,0,0.25) 0%, transparent 100%); padding: 1.15rem 1.4rem;">
                       <div class="flex items-center gap-3">
                         <div class="day-number-badge" style="background: ${borderColor}; color: #fff; min-width: 2.5rem; text-align: center;">Day ${day.dayNumber}</div>
                         <div>
@@ -131,26 +131,44 @@ const ItineraryBuilderView = {
                         const isConflicted = conflictData.conflictingIds.has(act.id);
                         const categoryMeta = CONFIG.CATEGORIES.find(c => c.id === act.category) || CONFIG.CATEGORIES[0];
 
+                        const actImg = act.image || 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=400&q=80';
+
                         return `
-                          <div class="activity-item ${isConflicted ? 'conflict-overlap' : ''}" id="act-item-${act.id}" data-act-id="${act.id}" style="margin: 0.5rem 0.75rem; border-radius: var(--radius-sm);">
+                          <div class="activity-item ${isConflicted ? 'conflict-overlap' : ''}" id="act-item-${act.id}" data-act-id="${act.id}">
                             <div class="activity-drag-handle" title="Reorder Activity">⋮⋮</div>
-                            <div style="font-size: 1.35rem;" title="${categoryMeta.name}">${categoryMeta.icon}</div>
                             
-                            <div style="flex: 1; min-width: 0;">
-                              <div class="flex items-center gap-2" style="margin-bottom: 2px;">
-                                <span class="font-semibold" style="font-size: 0.92rem; color: var(--text-main);">${Utils.escapeHtml(act.name)}</span>
-                                ${isConflicted ? `<span class="badge badge-amber" style="font-size: 0.65rem;">Overlap Conflict</span>` : ''}
-                              </div>
-                              <div class="flex items-center gap-3" style="font-size: 0.78rem; color: var(--text-muted); flex-wrap: wrap;">
-                                ${act.location ? `<span>📍 ${Utils.escapeHtml(act.location)}</span>` : ''}
-                                ${act.notes ? `<span>📝 ${Utils.escapeHtml(act.notes)}</span>` : ''}
-                              </div>
+                            <!-- Thumbnail Photo with Category Badge -->
+                            <div class="activity-thumb-wrapper">
+                              <img src="${actImg}" alt="${act.name}" class="activity-thumb-img" 
+                                onerror="this.src='https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=400&q=80'" />
+                              <span class="activity-category-pill" title="${categoryMeta.name}">${categoryMeta.icon}</span>
                             </div>
 
-                            <div class="activity-time-tag">${act.startTime || '--:--'} - ${act.endTime || '--:--'}</div>
-                            <div class="activity-cost-tag">${Utils.formatCurrency(act.cost || 0, trip.currency)}</div>
+                            <!-- Activity Body -->
+                            <div class="activity-body">
+                              <div class="activity-header-line">
+                                <span class="activity-title">${Utils.escapeHtml(act.name)}</span>
+                                ${isConflicted ? `<span class="badge badge-amber" style="font-size: 0.65rem;">Overlap Conflict</span>` : ''}
+                              </div>
+                              <div class="activity-meta-line">
+                                ${act.cityName ? `<span class="activity-meta-item" style="color: var(--accent-cyan); font-weight: 600;">🏙️ ${Utils.escapeHtml(act.cityName)}</span>` : ''}
+                                ${act.location ? `<span class="activity-meta-item">📍 ${Utils.escapeHtml(act.location)}</span>` : ''}
+                                <span class="activity-meta-item" style="color: ${categoryMeta.color}; font-weight: 500;">${categoryMeta.name}</span>
+                                ${act.duration ? `<span class="activity-meta-item">⏱️ ${act.duration}</span>` : ''}
+                              </div>
+                              ${(act.notes || act.description) ? `
+                                <p class="activity-description">${Utils.escapeHtml(act.notes || act.description)}</p>
+                              ` : ''}
+                            </div>
 
-                            <div class="flex items-center gap-1">
+                            <!-- Timing & Cost -->
+                            <div class="activity-timing-col">
+                              <div class="activity-time-tag">${act.startTime || '--:--'} - ${act.endTime || '--:--'}</div>
+                              <div class="activity-cost-tag">${Utils.formatCurrency(act.cost || 0, trip.currency)}</div>
+                            </div>
+
+                            <!-- Action Controls -->
+                            <div class="activity-actions">
                               ${index > 0 ? `
                                 <button class="btn btn-ghost btn-sm" onclick="ItineraryBuilderView.moveActivity('${trip.id}', ${day.dayNumber}, ${index}, -1)" title="Move earlier">▲</button>
                               ` : ''}
@@ -184,17 +202,41 @@ const ItineraryBuilderView = {
                   </button>
                 </div>
 
-                <h5 style="margin-bottom: 0.75rem; font-size: 0.85rem; color: var(--text-subtle); text-transform: uppercase;">Stops & Cities</h5>
+                <div class="flex items-center justify-between" style="margin-bottom: 0.75rem;">
+                  <h5 style="font-size: 0.85rem; color: var(--text-subtle); text-transform: uppercase; margin-bottom: 0;">Multi-City Stops & Sequence</h5>
+                  <span class="badge badge-cyan" style="font-size: 0.7rem;">${trip.stops?.length || 1} Stop${(trip.stops?.length || 1) === 1 ? '' : 's'}</span>
+                </div>
                 <div class="flex flex-col gap-2" style="margin-bottom: 1.5rem;">
-                  ${trip.stops && trip.stops.length > 0 ? trip.stops.map(s => `
-                    <div class="glass-card-subtle flex items-center justify-between" style="padding: 0.6rem 0.85rem;">
-                      <div>
-                        <div class="font-semibold" style="font-size: 0.875rem;">${Utils.escapeHtml(s.cityName)}</div>
-                        <div style="font-size: 0.75rem; color: var(--text-subtle);">${Utils.formatDateShort(s.arrivalDate)} - ${Utils.formatDateShort(s.departureDate)}</div>
+                  ${trip.stops && trip.stops.length > 0 ? trip.stops.map((s, stopIdx) => {
+                    const actsInStop = trip.days.reduce((count, d) => count + d.activities.filter(a => a.cityName === s.cityName || (!a.cityName && d.city === s.cityName)).length, 0);
+                    return `
+                      <div class="glass-card-subtle flex items-center justify-between" style="padding: 0.65rem 0.85rem; border-left: 3px solid var(--accent-cyan);">
+                        <div style="min-width: 0; flex: 1;">
+                          <div class="flex items-center gap-2">
+                            <span class="day-number-badge" style="background: var(--surface-3); font-size: 0.7rem; min-width: 1.6rem; height: 1.6rem; line-height: 1.6rem; padding: 0;">#${stopIdx + 1}</span>
+                            <span class="font-bold" style="font-size: 0.9rem;">${Utils.escapeHtml(s.cityName)}</span>
+                            <span class="badge badge-cyan" style="font-size: 0.65rem;">${Utils.escapeHtml(s.country || 'Global')}</span>
+                          </div>
+                          <div style="font-size: 0.75rem; color: var(--text-subtle); margin-top: 2px;">
+                            🗓️ ${Utils.formatDateShort(s.arrivalDate)} - ${Utils.formatDateShort(s.departureDate)} &bull; ${actsInStop} activit${actsInStop === 1 ? 'y' : 'ies'}
+                          </div>
+                        </div>
+
+                        <!-- Stop Reorder & Delete Controls -->
+                        <div class="flex items-center gap-1" style="flex-shrink: 0; margin-left: 0.5rem;">
+                          ${stopIdx > 0 ? `
+                            <button class="btn btn-ghost btn-sm" style="padding: 3px 6px; font-size: 0.75rem;" onclick="ItineraryBuilderView.moveStop('${trip.id}', ${stopIdx}, -1)" title="Move stop up">▲</button>
+                          ` : ''}
+                          ${stopIdx < trip.stops.length - 1 ? `
+                            <button class="btn btn-ghost btn-sm" style="padding: 3px 6px; font-size: 0.75rem;" onclick="ItineraryBuilderView.moveStop('${trip.id}', ${stopIdx}, 1)" title="Move stop down">▼</button>
+                          ` : ''}
+                          ${trip.stops.length > 1 ? `
+                            <button class="btn btn-ghost btn-sm" style="padding: 3px 6px; color: var(--accent-rose); font-size: 0.75rem;" onclick="ItineraryBuilderView.deleteStop('${trip.id}', '${s.id || stopIdx}')" title="Delete stop">🗑️</button>
+                          ` : ''}
+                        </div>
                       </div>
-                      <span class="badge badge-cyan">${s.country || 'Global'}</span>
-                    </div>
-                  `).join('') : `
+                    `;
+                  }).join('') : `
                     <div style="font-size: 0.8rem; color: var(--text-subtle);">No secondary stops configured.</div>
                   `}
                 </div>
@@ -238,6 +280,18 @@ const ItineraryBuilderView = {
           <div class="form-group">
             <label class="form-label">Activity Name <span class="required">*</span></label>
             <input type="text" id="act-name" class="form-control" placeholder="e.g. Louvre Guided Tour & Mona Lisa" required />
+          </div>
+
+          <!-- Stop / City Association -->
+          <div class="form-group">
+            <label class="form-label">Destination Stop / City</label>
+            <select id="act-stop" class="form-control">
+              ${trip.stops && trip.stops.length > 0 ? trip.stops.map(s => `
+                <option value="${Utils.escapeHtml(s.cityName)}">📍 ${Utils.escapeHtml(s.cityName)} (${Utils.escapeHtml(s.country || '')})</option>
+              `).join('') : `
+                <option value="${Utils.escapeHtml(trip.destination)}">📍 ${Utils.escapeHtml(trip.destination)}</option>
+              `}
+            </select>
           </div>
 
           <div class="form-row">
@@ -287,6 +341,7 @@ const ItineraryBuilderView = {
   async handleAddActivitySubmit(event, tripId, dayNumber) {
     event.preventDefault();
     const name = document.getElementById('act-name').value.trim();
+    const cityName = document.getElementById('act-stop')?.value || '';
     const category = document.getElementById('act-category').value;
     const cost = document.getElementById('act-cost').value;
     const startTime = document.getElementById('act-start-time').value;
@@ -300,7 +355,7 @@ const ItineraryBuilderView = {
     }
 
     try {
-      await MockApi.addActivity(tripId, dayNumber, { name, category, cost, startTime, endTime, location, notes });
+      await MockApi.addActivity(tripId, dayNumber, { name, cityName, category, cost, startTime, endTime, location, notes });
       AppRouter.closeModal();
       Utils.showToast(`Activity "${name}" added to Day ${dayNumber}!`, 'success');
       this.render(tripId);
@@ -325,6 +380,20 @@ const ItineraryBuilderView = {
           <div class="form-group">
             <label class="form-label">Activity Name <span class="required">*</span></label>
             <input type="text" id="edit-act-name" class="form-control" required value="${Utils.escapeHtml(act.name)}" />
+          </div>
+
+          <!-- Stop / City Association -->
+          <div class="form-group">
+            <label class="form-label">Destination Stop / City</label>
+            <select id="edit-act-stop" class="form-control">
+              ${trip.stops && trip.stops.length > 0 ? trip.stops.map(s => `
+                <option value="${Utils.escapeHtml(s.cityName)}" ${s.cityName === (act.cityName || day?.city) ? 'selected' : ''}>
+                  📍 ${Utils.escapeHtml(s.cityName)} (${Utils.escapeHtml(s.country || '')})
+                </option>
+              `).join('') : `
+                <option value="${Utils.escapeHtml(act.cityName || day?.city || trip.destination)}">📍 ${Utils.escapeHtml(act.cityName || day?.city || trip.destination)}</option>
+              `}
+            </select>
           </div>
 
           <div class="form-row">
@@ -374,6 +443,7 @@ const ItineraryBuilderView = {
   async handleEditActivitySubmit(event, tripId, dayNumber, activityId) {
     event.preventDefault();
     const name = document.getElementById('edit-act-name').value.trim();
+    const cityName = document.getElementById('edit-act-stop')?.value || '';
     const category = document.getElementById('edit-act-category').value;
     const cost = document.getElementById('edit-act-cost').value;
     const startTime = document.getElementById('edit-act-start-time').value;
@@ -382,7 +452,7 @@ const ItineraryBuilderView = {
     const notes = document.getElementById('edit-act-notes').value.trim();
 
     try {
-      await MockApi.updateActivity(tripId, dayNumber, activityId, { name, category, cost, startTime, endTime, location, notes });
+      await MockApi.updateActivity(tripId, dayNumber, activityId, { name, cityName, category, cost, startTime, endTime, location, notes });
       AppRouter.closeModal();
       Utils.showToast('Activity updated!', 'success');
       this.render(tripId);
@@ -474,6 +544,9 @@ const ItineraryBuilderView = {
   },
 
   openAddStopModal(tripId) {
+    const trip = AppStore.trips.find(t => t.id === tripId);
+    if (!trip) return;
+
     const modalHtml = `
       <div class="modal-header">
         <div class="modal-title">📍 Add Destination Stop</div>
@@ -481,17 +554,31 @@ const ItineraryBuilderView = {
       </div>
       <div class="modal-body">
         <form id="form-add-stop" onsubmit="ItineraryBuilderView.handleAddStopSubmit(event, '${tripId}')">
-          <div class="form-group">
-            <label class="form-label">City Name</label>
-            <input type="text" id="stop-city" class="form-control" placeholder="e.g. Kyoto" required />
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">City Name <span class="required">*</span></label>
+              <input type="text" id="stop-city" class="form-control" placeholder="e.g. Kyoto" required />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Country <span class="required">*</span></label>
+              <input type="text" id="stop-country" class="form-control" placeholder="e.g. Japan" required />
+            </div>
           </div>
-          <div class="form-group">
-            <label class="form-label">Country</label>
-            <input type="text" id="stop-country" class="form-control" placeholder="e.g. Japan" required />
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Stop Arrival Date <span class="required">*</span></label>
+              <input type="date" id="stop-arrival" class="form-control" required value="${trip.startDate}" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Stop Departure Date <span class="required">*</span></label>
+              <input type="date" id="stop-departure" class="form-control" required value="${trip.endDate}" />
+            </div>
           </div>
+
           <div class="modal-footer" style="padding-left: 0; padding-right: 0; margin-bottom: -0.5rem;">
             <button type="button" class="btn btn-secondary" onclick="AppRouter.closeModal()">Cancel</button>
-            <button type="submit" class="btn btn-primary">Add Stop</button>
+            <button type="submit" class="btn btn-primary">Add Stop to Trip</button>
           </div>
         </form>
       </div>
@@ -499,26 +586,93 @@ const ItineraryBuilderView = {
     AppRouter.openModal(modalHtml);
   },
 
-  handleAddStopSubmit(event, tripId) {
+  async handleAddStopSubmit(event, tripId) {
     event.preventDefault();
     const city = document.getElementById('stop-city').value.trim();
     const country = document.getElementById('stop-country').value.trim();
+    const arrival = document.getElementById('stop-arrival').value;
+    const departure = document.getElementById('stop-departure').value;
+
+    if (departure < arrival) {
+      Utils.showToast('Departure date must be after Arrival date.', 'error');
+      return;
+    }
 
     const trip = AppStore.trips.find(t => t.id === tripId);
     if (!trip) return;
 
     if (!trip.stops) trip.stops = [];
-    trip.stops.push({
+    const newStop = {
       id: 'stop-' + Date.now(),
       cityName: city,
       country: country,
-      arrivalDate: trip.startDate,
-      departureDate: trip.endDate
-    });
+      arrivalDate: arrival,
+      departureDate: departure,
+      timeZone: 'UTC'
+    };
+    trip.stops.push(newStop);
 
-    AppStore.saveTrips(AppStore.trips);
-    AppRouter.closeModal();
-    Utils.showToast(`Stop "${city}, ${country}" added!`, 'success');
-    this.render(tripId);
+    // If departure extends beyond trip end date, expand trip dates
+    let updatedDates = {};
+    if (departure > trip.endDate) {
+      updatedDates.endDate = departure;
+      trip.endDate = departure;
+    }
+    if (arrival < trip.startDate) {
+      updatedDates.startDate = arrival;
+      trip.startDate = arrival;
+    }
+
+    try {
+      await MockApi.updateTrip(tripId, { stops: trip.stops, ...updatedDates });
+      AppRouter.closeModal();
+      Utils.showToast(`Stop "${city}, ${country}" successfully added to itinerary!`, 'success');
+      this.render(tripId);
+    } catch (err) {
+      Utils.showToast(err.message || 'Failed to add stop.', 'error');
+    }
+  },
+
+  async moveStop(tripId, index, direction) {
+    const trip = AppStore.trips.find(t => t.id === tripId);
+    if (!trip || !trip.stops) return;
+
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= trip.stops.length) return;
+
+    const temp = trip.stops[index];
+    trip.stops[index] = trip.stops[targetIndex];
+    trip.stops[targetIndex] = temp;
+
+    try {
+      await MockApi.updateTrip(tripId, { stops: trip.stops });
+      Utils.showToast(`Stop "${temp.cityName}" moved to #${targetIndex + 1}!`, 'info');
+      this.render(tripId);
+    } catch (err) {
+      Utils.showToast(err.message || 'Failed to reorder stops.', 'error');
+    }
+  },
+
+  async deleteStop(tripId, stopIdentifier) {
+    const trip = AppStore.trips.find(t => t.id === tripId);
+    if (!trip || !trip.stops || trip.stops.length <= 1) {
+      Utils.showToast('Trips must have at least one destination stop.', 'warning');
+      return;
+    }
+
+    const stopToDelete = trip.stops.find(s => s.id === stopIdentifier || trip.stops.indexOf(s) == stopIdentifier);
+    if (!stopToDelete) return;
+
+    if (!confirm(`Are you sure you want to remove stop "${stopToDelete.cityName}"?`)) return;
+
+    trip.stops = trip.stops.filter(s => s !== stopToDelete);
+
+    try {
+      await MockApi.updateTrip(tripId, { stops: trip.stops });
+      Utils.showToast(`Stop "${stopToDelete.cityName}" removed.`, 'info');
+      this.render(tripId);
+    } catch (err) {
+      Utils.showToast(err.message || 'Failed to delete stop.', 'error');
+    }
   }
 };

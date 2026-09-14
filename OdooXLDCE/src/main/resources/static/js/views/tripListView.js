@@ -197,7 +197,7 @@ const TripListView = {
 
   openTrip(tripId) {
     AppStore.setCurrentTripId(tripId);
-    AppRouter.navigate('itinerary-builder', tripId);
+    AppRouter.navigate('itinerary-view', tripId);
   },
 
   async cloneTrip(tripId) {

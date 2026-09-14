@@ -33,11 +33,22 @@ const ProfileView = {
           <h3 style="margin-bottom: 1.25rem;">Personal Information</h3>
 
           <form id="form-profile" onsubmit="ProfileView.handleProfileSubmit(event)">
-            <!-- Avatar Selector -->
-            <div class="profile-avatar-selector">
+            <!-- Avatar Selector & Custom Photo Upload -->
+            <div class="profile-avatar-selector" style="align-items: flex-start;">
               <img src="${this.selectedAvatarUrl}" id="avatar-preview-img" class="avatar-preview-lg" alt="Avatar" />
-              <div>
-                <div class="font-semibold" style="font-size: 0.9rem; margin-bottom: 0.5rem;">Choose Traveler Avatar</div>
+              <div style="flex: 1;">
+                <div class="font-semibold" style="font-size: 0.9rem; margin-bottom: 0.5rem;">Choose Traveler Avatar or Upload Custom Photo</div>
+                
+                <!-- Custom Upload & URL Input -->
+                <div class="flex items-center gap-2" style="margin-bottom: 0.75rem; flex-wrap: wrap;">
+                  <input type="file" id="profile-photo-file" accept="image/*" style="display: none;" onchange="ProfileView.handlePhotoUpload(event)" />
+                  <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('profile-photo-file').click()">
+                    <span>📷</span> Upload Photo (≤10MB)
+                  </button>
+                  <input type="url" id="profile-photo-url" class="form-control" style="flex: 1; min-width: 180px; font-size: 0.85rem;" placeholder="Or paste photo URL..." oninput="ProfileView.handlePhotoUrl(this.value)" />
+                </div>
+
+                <div style="font-size: 0.75rem; color: var(--text-subtle); margin-bottom: 0.4rem;">Presets:</div>
                 <div class="avatar-options-grid">
                   ${CONFIG.AVATAR_PRESETS.map(url => `
                     <img src="${url}" class="avatar-option-thumb ${url === this.selectedAvatarUrl ? 'selected' : ''}"
@@ -86,12 +97,24 @@ const ProfileView = {
             </div>
 
             <div class="form-group">
-              <label class="form-label">Visual Interface Theme</label>
-              <select id="pref-theme" class="form-control" onchange="ProfileView.updateTheme(this.value)">
-                <option value="dark" ${settings.theme === 'dark' ? 'selected' : ''}>🌙 Midnight Dark Glassmorphism</option>
-                <option value="light" ${settings.theme === 'light' ? 'selected' : ''}>☀️ Crystal Light Glassmorphism</option>
+              <label class="form-label">Language Preference</label>
+              <select id="pref-language" class="form-control" onchange="ProfileView.updateLanguage(this.value)">
+                <option value="English (US)" ${(user.preferredLanguage || 'English (US)') === 'English (US)' ? 'selected' : ''}>🇺🇸 English (US)</option>
+                <option value="Spanish (Español)" ${user.preferredLanguage === 'Spanish (Español)' ? 'selected' : ''}>🇪🇸 Español (Spanish)</option>
+                <option value="French (Français)" ${user.preferredLanguage === 'French (Français)' ? 'selected' : ''}>🇫🇷 Français (French)</option>
+                <option value="German (Deutsch)" ${user.preferredLanguage === 'German (Deutsch)' ? 'selected' : ''}>🇩🇪 Deutsch (German)</option>
+                <option value="Japanese (日本語)" ${user.preferredLanguage === 'Japanese (日本語)' ? 'selected' : ''}>🇯🇵 日本語 (Japanese)</option>
+                <option value="Hindi (हिन्दी)" ${user.preferredLanguage === 'Hindi (हिन्दी)' ? 'selected' : ''}>🇮🇳 हिन्दी (Hindi)</option>
               </select>
             </div>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label">Visual Interface Theme</label>
+            <select id="pref-theme" class="form-control" onchange="ProfileView.updateTheme(this.value)">
+              <option value="dark" ${settings.theme === 'dark' ? 'selected' : ''}>🌙 Midnight Dark Glassmorphism</option>
+              <option value="light" ${settings.theme === 'light' ? 'selected' : ''}>☀️ Crystal Light Glassmorphism</option>
+            </select>
           </div>
         </div>
 
@@ -134,18 +157,21 @@ const ProfileView = {
 
         <!-- Data Management & Danger Zone -->
         <div class="glass-card" style="border-left: 4px solid var(--accent-rose);">
-          <h3 style="margin-bottom: 0.5rem; color: var(--accent-rose);">Data Management & Reset</h3>
-          <p style="font-size: 0.85rem; margin-bottom: 1.25rem;">Export your travel plans as a JSON backup, or reset your environment to the initial demo state.</p>
+          <h3 style="margin-bottom: 0.5rem; color: var(--accent-rose);">Data Management & Privacy</h3>
+          <p style="font-size: 0.85rem; margin-bottom: 1.25rem;">Export your travel plans as a JSON backup, reset demo data, or permanently delete your account.</p>
 
           <div class="flex items-center gap-3" style="flex-wrap: wrap;">
             <button class="btn btn-secondary" onclick="ProfileView.exportDataBackup()">
               <span>📥</span> Export JSON Backup
             </button>
             <button class="btn btn-secondary" onclick="ProfileView.promptResetDemo()">
-              <span>🔄</span> Reset to Initial Demo Data
+              <span>🔄</span> Reset to Demo Data
             </button>
-            <button class="btn btn-danger" onclick="ProfileView.handleSignOut()">
+            <button class="btn btn-secondary" onclick="ProfileView.handleSignOut()">
               <span>🚪</span> Sign Out
+            </button>
+            <button class="btn btn-danger" onclick="ProfileView.promptDeleteAccount()">
+              <span>🗑️</span> Delete Account
             </button>
           </div>
         </div>
@@ -157,7 +183,39 @@ const ProfileView = {
     this.selectedAvatarUrl = url;
     document.getElementById('avatar-preview-img').src = url;
     document.querySelectorAll('.avatar-option-thumb').forEach(t => t.classList.remove('selected'));
-    el.classList.add('selected');
+    if (el) el.classList.add('selected');
+  },
+
+  handlePhotoUpload(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // 10MB Guard
+    if (file.size > 10 * 1024 * 1024) {
+      Utils.showToast('Avatar image exceeds 10MB limit. Please choose a smaller photo.', 'error');
+      event.target.value = '';
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target.result;
+      this.selectedAvatarUrl = dataUrl;
+      const preview = document.getElementById('avatar-preview-img');
+      if (preview) preview.src = dataUrl;
+      document.querySelectorAll('.avatar-option-thumb').forEach(t => t.classList.remove('selected'));
+      Utils.showToast('Profile photo updated from device!', 'success');
+    };
+    reader.readAsDataURL(file);
+  },
+
+  handlePhotoUrl(url) {
+    const trimmed = url.trim();
+    if (!trimmed) return;
+    this.selectedAvatarUrl = trimmed;
+    const preview = document.getElementById('avatar-preview-img');
+    if (preview) preview.src = trimmed;
+    document.querySelectorAll('.avatar-option-thumb').forEach(t => t.classList.remove('selected'));
   },
 
   handleProfileSubmit(event) {
@@ -180,6 +238,12 @@ const ProfileView = {
     AppStore.user.homeCurrency = currCode;
     AppStore.saveUser(AppStore.user);
     Utils.showToast(`Default currency set to ${currCode}!`, 'success');
+  },
+
+  updateLanguage(lang) {
+    AppStore.user.preferredLanguage = lang;
+    AppStore.saveUser(AppStore.user);
+    Utils.showToast(`Language preference updated to ${lang}!`, 'success');
   },
 
   updateTheme(theme) {
@@ -220,6 +284,31 @@ const ProfileView = {
       Utils.showToast('All data reset to default demo seed data!', 'success');
       AppRouter.navigate('dashboard');
     }
+  },
+
+  promptDeleteAccount() {
+    const confirmed = confirm(
+      '⚠️ WARNING: Are you sure you want to permanently delete your account?\n\n' +
+      'All your trips, itineraries, and saved preferences will be completely erased.'
+    );
+    if (!confirmed) return;
+
+    // Purge user data
+    AppStore.trips = [];
+    AppStore.wishlist = [];
+    AppStore.saveTrips([]);
+    AppStore.saveWishlist([]);
+    AppStore.user = {
+      id: null,
+      name: '',
+      email: '',
+      avatar: CONFIG.AVATAR_PRESETS[0],
+      isLoggedIn: false
+    };
+    AppStore.saveUser(AppStore.user);
+
+    Utils.showToast('Your account and travel data have been permanently deleted.', 'warning');
+    AppRouter.navigate('auth');
   },
 
   handleSignOut() {

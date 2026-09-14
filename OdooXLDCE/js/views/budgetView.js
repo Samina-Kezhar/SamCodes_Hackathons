@@ -59,6 +59,21 @@ const BudgetView = {
       cost: categoryTotals[c.id] || 0
     })).filter(c => c.cost > 0);
 
+    // Calculate 4 Core Cost Pillars (Transport, Stay, Activities, Meals) per feature spec
+    const transportSpend = categoryTotals['transport'] || 0;
+    const staySpend = categoryTotals['stay'] || 0;
+    const mealsSpend = categoryTotals['food'] || 0;
+    const activitiesSpend = (categoryTotals['sightseeing'] || 0) + (categoryTotals['adventure'] || 0) + 
+                            (categoryTotals['culture'] || 0) + (categoryTotals['nightlife'] || 0) + 
+                            (categoryTotals['shopping'] || 0);
+
+    const pillars = [
+      { name: 'Transport', icon: '🚆', cost: transportSpend, color: '#06b6d4', desc: 'Flights, trains & transit' },
+      { name: 'Stay / Lodging', icon: '🏨', cost: staySpend, color: '#8b5cf6', desc: 'Hotels, hostels & villas' },
+      { name: 'Activities & Sights', icon: '🎯', cost: activitiesSpend, color: '#6366f1', desc: 'Tours, tickets & landmarks' },
+      { name: 'Meals & Dining', icon: '🍽️', cost: mealsSpend, color: '#f59e0b', desc: 'Restaurants & street food' }
+    ];
+
     container.innerHTML = `
       <div class="animate-fade-in" style="max-width: 1100px; margin: 0 auto;">
         <!-- Header -->
@@ -131,6 +146,34 @@ const BudgetView = {
               <div class="stat-label">Avg Daily Spend / ${duration}d</div>
             </div>
           </div>
+        </div>
+
+        <!-- 4 Core Cost Pillars Grid (Transport, Stay, Activities, Meals) -->
+        <div class="section-header" style="margin-top: 1.5rem; margin-bottom: 0.75rem;">
+          <div class="section-title" style="font-size: 1.05rem;">
+            <span>💼</span> Breakdown by Transport, Stay, Activities & Meals
+          </div>
+        </div>
+        <div class="stats-grid" style="margin-bottom: 1.5rem;">
+          ${pillars.map(p => {
+            const pct = totalSpent > 0 ? Math.round((p.cost / totalSpent) * 100) : 0;
+            return `
+              <div class="glass-card" style="padding: 1.15rem; border-top: 3px solid ${p.color};">
+                <div class="flex items-center justify-between" style="margin-bottom: 0.35rem;">
+                  <span style="font-size: 1.25rem;">${p.icon}</span>
+                  <span class="badge" style="background: rgba(255,255,255,0.06); font-size: 0.75rem;">${pct}%</span>
+                </div>
+                <h4 style="font-size: 0.95rem; margin-bottom: 0.15rem;">${p.name}</h4>
+                <div style="font-size: 0.75rem; color: var(--text-subtle); margin-bottom: 0.6rem;">${p.desc}</div>
+                <div style="font-size: 1.15rem; font-weight: 800; color: ${p.cost > 0 ? 'var(--text-main)' : 'var(--text-subtle)'};">
+                  ${Utils.formatCurrency(p.cost, trip.currency)}
+                </div>
+                <div class="progress-bar-wrap" style="margin-top: 0.5rem; height: 5px;">
+                  <div class="progress-bar-fill" style="width: ${pct}%; background: ${p.color};"></div>
+                </div>
+              </div>
+            `;
+          }).join('')}
         </div>
 
         <!-- Charts Grid -->

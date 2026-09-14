@@ -248,7 +248,7 @@ const DashboardView = {
 
   openTrip(tripId) {
     AppStore.setCurrentTripId(tripId);
-    AppRouter.navigate('itinerary-builder', tripId);
+    AppRouter.navigate('itinerary-view', tripId);
   },
 
   planTripToDestination(destId) {

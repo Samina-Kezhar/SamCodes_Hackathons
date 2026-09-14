@@ -45,10 +45,20 @@
           <span>Dashboard</span>
         </div>
 
+        <div class="nav-item" data-route="create-trip" onclick="AppRouter.navigate('create-trip'); AppRouter.closeMobileSidebar();" id="nav-link-create-trip">
+          <span class="nav-item-icon">➕</span>
+          <span>Plan & Generate Trip</span>
+        </div>
+
         <div class="nav-item" data-route="my-trips" onclick="AppRouter.navigate('my-trips'); AppRouter.closeMobileSidebar();" id="nav-link-my-trips">
           <span class="nav-item-icon">🗺️</span>
           <span>My Trips</span>
-          <span class="nav-item-badge" id="my-trips-count-badge">2</span>
+          <span class="nav-item-badge" id="my-trips-count-badge">0</span>
+        </div>
+
+        <div class="nav-item" data-route="itinerary-view" onclick="AppRouter.navigate('itinerary-view'); AppRouter.closeMobileSidebar();" id="nav-link-itinerary-view">
+          <span class="nav-item-icon">📑</span>
+          <span>Itinerary Section (Boxed)</span>
         </div>
 
         <div class="nav-item" data-route="itinerary-builder" onclick="AppRouter.navigate('itinerary-builder'); AppRouter.closeMobileSidebar();" id="nav-link-builder">
@@ -93,15 +103,15 @@
 
       <!-- Sidebar User Profile Footer -->
       <div class="sidebar-footer">
-        <div class="user-profile-summary" onclick="AppRouter.navigate('profile'); AppRouter.closeMobileSidebar();" title="Manage Profile">
-          <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80" alt="Traveler" class="user-avatar-img" id="user-sidebar-avatar" />
+        <div class="user-profile-summary" onclick="AppRouter.navigate('profile'); AppRouter.closeMobileSidebar();">
+          <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80" alt="Alex River" class="user-avatar-img" id="user-sidebar-avatar" />
           <div style="min-width: 0; flex: 1;">
-            <div class="user-meta-name" id="user-sidebar-name">Traveler</div>
-            <div class="user-meta-email" id="user-sidebar-email">traveler@globetrotter.io</div>
+            <div class="user-meta-name" id="user-sidebar-name">Alex River</div>
+            <div class="user-meta-email" id="user-sidebar-email">alex.river@globetrotter.io</div>
           </div>
         </div>
-        <button class="btn btn-icon btn-ghost btn-sm" onclick="AppStore.signOut(); AppRouter.navigate('auth'); Utils.showToast('You have been signed out.', 'info');" title="Sign Out" style="color: var(--accent-rose);">
-          🚪
+        <button type="button" class="btn btn-ghost btn-sm w-full" onclick="AppStore.logout()" style="margin-top: 0.5rem; justify-content: flex-start; color: var(--accent-rose); font-size: 0.8rem; padding: 4px 8px;" title="Sign out of GlobeTrotter">
+          <span>🚪</span> Sign Out / Switch User
         </button>
       </div>
     </aside>
@@ -137,6 +147,11 @@
           <!-- Theme Toggle Quick Switch -->
           <button class="btn btn-icon btn-secondary" onclick="ProfileView.updateTheme(AppStore.settings.theme === 'dark' ? 'light' : 'dark')" title="Toggle Dark/Light Mode">
             🌓
+          </button>
+
+          <!-- Quick Logout Button -->
+          <button class="btn btn-icon btn-secondary" onclick="AppStore.logout()" title="Sign Out">
+            🚪
           </button>
         </div>
       </header>
@@ -186,6 +201,7 @@
   <script src="js/config.js"></script>
   <script src="js/state.js"></script>
   <script src="js/utils.js"></script>
+  <script src="js/generator.js"></script>
   <script src="js/charts.js"></script>
   <script src="js/api.js"></script>
 
